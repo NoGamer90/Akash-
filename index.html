@@ -12,25 +12,53 @@
             color: #1F7D53;
             line-height: 1.6;
         }
-        a {
-            text-decoration: none;
-            color: #007bff;
-        }
-        header {
-            background-color: #4a90e2;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-        nav ul {
-            list-style: none;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-        }
-        nav ul li {
-            padding: 10px;
-        }
+#nav ul{
+  list-style: none;
+  overflow: scroll;
+  white-space: nowrap;
+}
+#nav ul li{
+  display: inline;
+  margin: 2px;
+}
+#nav ul li a{
+  text-decoration: none;
+  border-style: double;
+  color: blue;
+  border: 2px
+  border-color: blue;
+  background-color: black;
+}
+#nav ul li #uc{
+  text-decoration: none;
+  border-style: double;
+  color: green;
+  border: 2px 
+  border-color: green;
+  background-color: black;
+}
+#nav ul li a:hover{
+  text-decoration: none;
+  border-style: double;
+  color: red;
+  border: 2px 
+  border-color: red;
+  background-color: yellow;
+}
+#nav ul li #uc:hover{
+  text-decoration: none;
+  border-style: double;
+  color: red;
+  border: 2px 
+  border-color: red;
+  background-color: yellow;
+}
+#h2{
+  background-color: green;
+  color: white;
+  text-align: center;
+  text-shadow: 3px 3px 8px;
+}
         /* Section Styles */
         section {
             padding: 30px 20px;
