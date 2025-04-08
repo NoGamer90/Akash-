@@ -1,0 +1,873 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheese Chess Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5dc;
+            font-family: 'Georgia', serif;
+        }
+        
+        .chess-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 80vmin;
+            height: 80vmin;
+            max-width: 600px;
+            max-height: 600px;
+            border: 12px solid #8B4513;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .light {
+            background-color: #f0d9b5;
+        }
+        
+        .dark {
+            background-color: #b58863;
+        }
+        
+        .piece {
+            width: 80%;
+            height: 80%;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            cursor: pointer;
+            z-index: 2;
+            transition: transform 0.2s;
+        }
+        
+        .piece:hover {
+            transform: scale(1.1);
+        }
+        
+        .coordinates {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .rank {
+            left: 2px;
+            top: 2px;
+        }
+        
+        .file {
+            right: 2px;
+            bottom: 2px;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background-color: #8B4513;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: #A0522D;
+        }
+        
+        .status {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #5D4037;
+            font-size: 18px;
+        }
+        
+        .highlight {
+            background-color: rgba(255, 255, 0, 0.4);
+        }
+        
+        .capture-hl {
+            background-color: rgba(255, 0, 0, 0.4);
+        }
+        
+        .check-hl {
+            background-color: rgba(255, 0, 0, 0.7);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 10;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: #f0d9b5;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .promotion-options {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .promotion-piece {
+            width: 50px;
+            height: 50px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .promotion-piece:hover {
+            border-color: #8B4513;
+        }
+    </style>
+</head>
+<body>
+    <div class="chess-container">
+        <div class="chess-board" id="chessBoard"></div>
+        <div class="status" id="status">White's turn</div>
+        <div class="controls">
+            <button id="undoBtn">Undo</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+    </div>
+
+    <div class="modal" id="promotionModal">
+        <div class="modal-content">
+            <h3>Promote your pawn to:</h3>
+            <div class="promotion-options">
+                <div class="promotion-piece" data-type="queen"></div>
+                <div class="promotion-piece" data-type="rook"></div>
+                <div class="promotion-piece" data-type="bishop"></div>
+                <div class="promotion-piece" data-type="knight"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const board = document.getElementById('chessBoard');
+            const statusDisplay = document.getElementById('status');
+            const undoBtn = document.getElementById('undoBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const promotionModal = document.getElementById('promotionModal');
+            const promotionOptions = document.querySelectorAll('.promotion-piece');
+            
+            let selectedPiece = null;
+            let currentPlayer = 'white';
+            let gameState = [];
+            let moveHistory = [];
+            let enPassantTarget = null;
+            let castlingRights = {
+                white: { kingSide: true, queenSide: true },
+                black: { kingSide: true, queenSide: true }
+            };
+            let promotionMove = null;
+            let checkStatus = { white: false, black: false };
+            
+            // Cheese piece images
+            const cheesePieces = {
+                white: {
+                    pawn: 'https://cdn-icons-png.flaticon.com/512/1046/1046780.png', // Cheese wedge
+                    rook: 'https://cdn-icons-png.flaticon.com/512/3199/3199789.png', // Cheese block
+                    knight: 'https://cdn-icons-png.flaticon.com/512/3199/3199778.png', // Cheese with holes
+                    bishop: 'https://cdn-icons-png.flaticon.com/512/3199/3199785.png', // Cheese triangle
+                    queen: 'https://cdn-icons-png.flaticon.com/512/3199/3199782.png', // Fancy cheese wheel
+                    king: 'https://cdn-icons-png.flaticon.com/512/3199/3199779.png'  // Crowned cheese wheel
+                },
+                black: {
+                    pawn: 'https://cdn-icons-png.flaticon.com/512/1046/1046780.png', // Blue cheese wedge
+                    rook: 'https://cdn-icons-png.flaticon.com/512/3199/3199789.png', // Blue cheese block
+                    knight: 'https://cdn-icons-png.flaticon.com/512/3199/3199778.png', // Blue cheese with holes
+                    bishop: 'https://cdn-icons-png.flaticon.com/512/3199/3199785.png', // Blue cheese triangle
+                    queen: 'https://cdn-icons-png.flaticon.com/512/3199/3199782.png', // Fancy blue cheese wheel
+                    king: 'https://cdn-icons-png.flaticon.com/512/3199/3199779.png'  // Crowned blue cheese wheel
+                }
+            };
+            
+            // Initialize the board
+            function initializeBoard() {
+                board.innerHTML = '';
+                
+                for (let rank = 8; rank >= 1; rank--) {
+                    for (let file = 1; file <= 8; file++) {
+                        const square = document.createElement('div');
+                        const isLight = (rank + file) % 2 === 0;
+                        
+                        square.className = `square ${isLight ? 'light' : 'dark'}`;
+                        square.dataset.rank = rank;
+                        square.dataset.file = file;
+                        
+                        // Add coordinates
+                        if (file === 1) {
+                            const rankCoord = document.createElement('span');
+                            rankCoord.className = 'coordinates rank';
+                            rankCoord.textContent = rank;
+                            square.appendChild(rankCoord);
+                        }
+                        
+                        if (rank === 1) {
+                            const fileCoord = document.createElement('span');
+                            fileCoord.className = 'coordinates file';
+                            fileCoord.textContent = String.fromCharCode(96 + file);
+                            square.appendChild(fileCoord);
+                        }
+                        
+                        // Add piece if exists
+                        const piece = gameState.find(p => p.rank === rank && p.file === file);
+                        if (piece) {
+                            const pieceElement = document.createElement('div');
+                            pieceElement.className = 'piece';
+                            pieceElement.dataset.type = piece.type;
+                            pieceElement.dataset.color = piece.color;
+                            pieceElement.dataset.hasMoved = piece.hasMoved || false;
+                            pieceElement.style.backgroundImage = `url('${cheesePieces[piece.color][piece.type]}')`;
+                            pieceElement.style.filter = piece.color === 'black' ? 'hue-rotate(180deg) brightness(0.7)' : '';
+                            pieceElement.addEventListener('click', handlePieceClick);
+                            square.appendChild(pieceElement);
+
+                            // Highlight king in check
+                            if (piece.type === 'king' && checkStatus[piece.color]) {
+                                square.classList.add('check-hl');
+                            }
+                        }
+                        
+                        square.addEventListener('click', handleSquareClick);
+                        board.appendChild(square);
+                    }
+                }
+                
+                updateStatus();
+            }
+            
+            function createInitialState() {
+                return [
+                    // White pieces
+                    { type: 'rook', color: 'white', rank: 1, file: 1, hasMoved: false },
+                    { type: 'knight', color: 'white', rank: 1, file: 2, hasMoved: false },
+                    { type: 'bishop', color: 'white', rank: 1, file: 3, hasMoved: false },
+                    { type: 'queen', color: 'white', rank: 1, file: 4, hasMoved: false },
+                    { type: 'king', color: 'white', rank: 1, file: 5, hasMoved: false },
+                    { type: 'bishop', color: 'white', rank: 1, file: 6, hasMoved: false },
+                    { type: 'knight', color: 'white', rank: 1, file: 7, hasMoved: false },
+                    { type: 'rook', color: 'white', rank: 1, file: 8, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 1, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 2, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 3, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 4, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 5, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 6, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 7, hasMoved: false },
+                    { type: 'pawn', color: 'white', rank: 2, file: 8, hasMoved: false },
+                    
+                    // Black pieces
+                    { type: 'rook', color: 'black', rank: 8, file: 1, hasMoved: false },
+                    { type: 'knight', color: 'black', rank: 8, file: 2, hasMoved: false },
+                    { type: 'bishop', color: 'black', rank: 8, file: 3, hasMoved: false },
+                    { type: 'queen', color: 'black', rank: 8, file: 4, hasMoved: false },
+                    { type: 'king', color: 'black', rank: 8, file: 5, hasMoved: false },
+                    { type: 'bishop', color: 'black', rank: 8, file: 6, hasMoved: false },
+                    { type: 'knight', color: 'black', rank: 8, file: 7, hasMoved: false },
+                    { type: 'rook', color: 'black', rank: 8, file: 8, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 1, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 2, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 3, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 4, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 5, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 6, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 7, hasMoved: false },
+                    { type: 'pawn', color: 'black', rank: 7, file: 8, hasMoved: false }
+                ];
+            }
+            
+            function updateStatus() {
+                checkStatus.white = isKingInCheck('white');
+                checkStatus.black = isKingInCheck('black');
+                
+                const isCheckmate = (currentPlayer === 'white' && isCheckmated('white')) || 
+                                  (currentPlayer === 'black' && isCheckmated('black'));
+                const isStalemate = isStalemated(currentPlayer);
+                
+                if (isCheckmate) {
+                    statusDisplay.textContent = `Checkmate! ${currentPlayer === 'white' ? 'Black' : 'White'} wins!`;
+                } else if (isStalemate) {
+                    statusDisplay.textContent = "Stalemate! Game drawn.";
+                } else if (checkStatus[currentPlayer]) {
+                    statusDisplay.textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} is in check!`;
+                } else {
+                    statusDisplay.textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s turn`;
+                }
+            }
+            
+            function handlePieceClick(e) {
+                e.stopPropagation();
+                const piece = e.target;
+                const color = piece.dataset.color;
+                
+                if (color !== currentPlayer) return;
+                
+                // Deselect if clicking the same piece
+                if (selectedPiece === piece) {
+                    selectedPiece.style.boxShadow = '';
+                    selectedPiece = null;
+                    clearHighlights();
+                    return;
+                }
+                
+                // Deselect previous piece
+                if (selectedPiece) {
+                    selectedPiece.style.boxShadow = '';
+                }
+                
+                // Select new piece
+                selectedPiece = piece;
+                piece.style.boxShadow = '0 0 10px 5px rgba(255, 215, 0, 0.7)';
+                
+                // Highlight possible moves
+                clearHighlights();
+                highlightPossibleMoves(piece);
+            }
+            
+            function highlightPossibleMoves(piece) {
+                const pieceData = {
+                    type: piece.dataset.type,
+                    color: piece.dataset.color,
+                    rank: parseInt(piece.parentElement.dataset.rank),
+                    file: parseInt(piece.parentElement.dataset.file),
+                    hasMoved: piece.dataset.hasMoved === 'true'
+                };
+                
+                for (let rank = 1; rank <= 8; rank++) {
+                    for (let file = 1; file <= 8; file++) {
+                        if (isValidMove(pieceData, rank, file)) {
+                            const square = document.querySelector(`.square[data-rank="${rank}"][data-file="${file}"]`);
+                            const targetPiece = gameState.find(p => p.rank === rank && p.file === file);
+                            
+                            if (targetPiece) {
+                                square.classList.add('capture-hl');
+                            } else {
+                                square.classList.add('highlight');
+                            }
+                        }
+                    }
+                }
+            }
+            
+            function clearHighlights() {
+                document.querySelectorAll('.highlight, .capture-hl').forEach(el => {
+                    el.classList.remove('highlight', 'capture-hl');
+                });
+            }
+            
+            function handleSquareClick(e) {
+                if (!selectedPiece) return;
+                
+                const square = e.currentTarget;
+                const rank = parseInt(square.dataset.rank);
+                const file = parseInt(square.dataset.file);
+                
+                const piece = {
+                    type: selectedPiece.dataset.type,
+                    color: selectedPiece.dataset.color,
+                    rank: parseInt(selectedPiece.parentElement.dataset.rank),
+                    file: parseInt(selectedPiece.parentElement.dataset.file),
+                    hasMoved: selectedPiece.dataset.hasMoved === 'true'
+                };
+                
+                if (isValidMove(piece, rank, file)) {
+                    // Save current state for undo
+                    moveHistory.push({
+                        state: JSON.parse(JSON.stringify(gameState)),
+                        enPassant: enPassantTarget,
+                        castling: JSON.parse(JSON.stringify(castlingRights)),
+                        currentPlayer: currentPlayer,
+                        checkStatus: JSON.parse(JSON.stringify(checkStatus))
+                    });
+                    
+                    // Handle special moves
+                    if (piece.type === 'pawn') {
+                        // Set en passant target for double pawn push
+                        if (Math.abs(rank - piece.rank) === 2) {
+                            enPassantTarget = { rank: piece.rank + (piece.color === 'white' ? 1 : -1), file: piece.file };
+                        } else {
+                            enPassantTarget = null;
+                        }
+                        
+                        // Handle en passant capture
+                        if (file !== piece.file && !gameState.find(p => p.rank === rank && p.file === file)) {
+                            // Remove the captured pawn
+                            gameState = gameState.filter(p => !(
+                                p.rank === piece.rank && 
+                                p.file === file && 
+                                p.type === 'pawn' && 
+                                p.color !== piece.color
+                            ));
+                        }
+                        
+                        // Handle pawn promotion
+                        if (rank === 8 || rank === 1) {
+                            promotionMove = {
+                                piece: piece,
+                                targetRank: rank,
+                                targetFile: file
+                            };
+                            showPromotionModal();
+                            return;
+                        }
+                    } else {
+                        enPassantTarget = null;
+                    }
+                    
+                    // Handle castling
+                    if (piece.type === 'king' && Math.abs(file - piece.file) === 2) {
+                        // Move the rook
+                        const rookFile = file > piece.file ? 8 : 1;
+                        const newRookFile = file > piece.file ? file - 1 : file + 1;
+                        
+                        const rookIndex = gameState.findIndex(p => 
+                            p.rank === piece.rank && 
+                            p.file === rookFile && 
+                            p.type === 'rook' && 
+                            p.color === piece.color
+                        );
+                        
+                        if (rookIndex !== -1) {
+                            gameState[rookIndex].file = newRookFile;
+                            gameState[rookIndex].hasMoved = true;
+                        }
+                    }
+                    
+                    // Remove any piece on the target square
+                    gameState = gameState.filter(p => !(p.rank === rank && p.file === file));
+                    
+                    // Update the moving piece's position
+                    const pieceIndex = gameState.findIndex(p => 
+                        p.rank === piece.rank && p.file === piece.file);
+                        
+                    if (pieceIndex !== -1) {
+                        gameState[pieceIndex].rank = rank;
+                        gameState[pieceIndex].file = file;
+                        gameState[pieceIndex].hasMoved = true;
+                    }
+                    
+                    // Update castling rights if king or rook moved
+                    if (piece.type === 'king') {
+                        castlingRights[piece.color].kingSide = false;
+                        castlingRights[piece.color].queenSide = false;
+                    }
+                    
+                    if (piece.type === 'rook') {
+                        if (piece.file === 1) {
+                            castlingRights[piece.color].queenSide = false;
+                        } else if (piece.file === 8) {
+                            castlingRights[piece.color].kingSide = false;
+                        }
+                    }
+                    
+                    // Switch player
+                    currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+                    
+                    // Redraw board
+                    initializeBoard();
+                }
+            }
+            
+            function showPromotionModal() {
+                promotionModal.style.display = 'flex';
+                
+                // Set piece images
+                promotionOptions.forEach(option => {
+                    const type = option.dataset.type;
+                    option.style.backgroundImage = `url('${cheesePieces[promotionMove.piece.color][type]}')`;
+                    option.style.filter = promotionMove.piece.color === 'black' ? 'hue-rotate(180deg) brightness(0.7)' : '';
+                    option.onclick = () => handlePromotionChoice(type);
+                });
+            }
+            
+            function handlePromotionChoice(type) {
+                if (promotionMove) {
+                    // Remove any piece on the target square
+                    gameState = gameState.filter(p => !(
+                        p.rank === promotionMove.targetRank && 
+                        p.file === promotionMove.targetFile
+                    ));
+                    
+                    // Update the moving piece's position and type
+                    const pieceIndex = gameState.findIndex(p => 
+                        p.rank === promotionMove.piece.rank && 
+                        p.file === promotionMove.piece.file
+                    );
+                        
+                    if (pieceIndex !== -1) {
+                        gameState[pieceIndex].rank = promotionMove.targetRank;
+                        gameState[pieceIndex].file = promotionMove.targetFile;
+                        gameState[pieceIndex].type = type;
+                        gameState[pieceIndex].hasMoved = true;
+                    }
+                    
+                    promotionModal.style.display = 'none';
+                    
+                    // Switch player
+                    currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+                    
+                    // Redraw board
+                    initializeBoard();
+                    
+                    promotionMove = null;
+                }
+            }
+            
+            function isValidMove(piece, targetRank, targetFile) {
+                // Check if target square has a piece of the same color
+                const targetPiece = gameState.find(p => p.rank === targetRank && p.file === targetFile);
+                if (targetPiece && targetPiece.color === piece.color) {
+                    return false;
+                }
+                
+                const dx = Math.abs(targetFile - piece.file);
+                const dy = targetRank - piece.rank;
+                const direction = piece.color === 'white' ? 1 : -1;
+                
+                // Check if move would leave king in check
+                const tempState = JSON.parse(JSON.stringify(gameState));
+                const pieceIndex = tempState.findIndex(p => 
+                    p.rank === piece.rank && p.file === piece.file);
+                
+                if (pieceIndex !== -1) {
+                    // Remove any piece on the target square
+                    tempState.forEach((p, i) => {
+                        if (p.rank === targetRank && p.file === targetFile) {
+                            tempState.splice(i, 1);
+                        }
+                    });
+                    
+                    // Update the moving piece's position
+                    tempState[pieceIndex].rank = targetRank;
+                    tempState[pieceIndex].file = targetFile;
+                    
+                    // Check if king would be in check after this move
+                    const tempGameState = gameState;
+                    gameState = tempState;
+                    const kingInCheck = isKingInCheck(piece.color);
+                    gameState = tempGameState;
+                    
+                    if (kingInCheck) {
+                        return false;
+                    }
+                }
+                
+                switch(piece.type) {
+                    case 'pawn':
+                        // Forward move
+                        if (targetFile === piece.file) {
+                            if (!targetPiece) {
+                                if (dy === direction) return true;
+                                if (!piece.hasMoved && dy === 2 * direction) {
+                                    // Check if path is clear
+                                    const intermediateRank = piece.rank + direction;
+                                    return !gameState.some(p => 
+                                        p.file === piece.file && 
+                                        p.rank === intermediateRank
+                                    ) && !gameState.some(p => 
+                                        p.file === piece.file && 
+                                        p.rank === targetRank
+                                    );
+                                }
+                            }
+                            return false;
+                        }
+                        
+                        // Capture
+                        if (dx === 1 && dy === direction) {
+                            // Normal capture
+                            if (targetPiece) return true;
+                            
+                            // En passant
+                            if (enPassantTarget && 
+                                targetRank === enPassantTarget.rank && 
+                                targetFile === enPassantTarget.file) {
+                                return true;
+                            }
+                        }
+                        return false;
+                        
+                    case 'rook':
+                        return (dx === 0 || dy === 0) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'knight':
+                        return (dx === 1 && Math.abs(dy) === 2) || (dx === 2 && Math.abs(dy) === 1);
+                        
+                    case 'bishop':
+                        return (dx === Math.abs(dy)) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'queen':
+                        return ((dx === Math.abs(dy)) || (dx === 0 || dy === 0)) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'king':
+                        // Normal move
+                        if (dx <= 1 && Math.abs(dy) <= 1) return true;
+                        
+                        // Castling
+                        if (!piece.hasMoved && dy === 0 && (dx === 2 || dx === 3)) {
+                            // King side castling
+                            if (dx === 2 && targetFile > piece.file && castlingRights[piece.color].kingSide) {
+                                // Check if path is clear
+                                const rookFile = 8;
+                                const intermediateFile = piece.file + 1;
+                                
+                                const rook = gameState.find(p => 
+                                    p.rank === piece.rank && 
+                                    p.file === rookFile && 
+                                    p.type === 'rook' && 
+                                    p.color === piece.color &&
+                                    !p.hasMoved
+                                );
+                                
+                                if (!rook) return false;
+                                
+                                // Check if squares between are empty
+                                if (gameState.some(p => 
+                                    p.rank === piece.rank && 
+                                    (p.file === intermediateFile || p.file === targetFile)
+                                )) return false;
+                                
+                                return true;
+                            }
+                            
+                            // Queen side castling
+                            if (dx === 3 && targetFile < piece.file && castlingRights[piece.color].queenSide) {
+                                const rookFile = 1;
+                                const intermediateFile = piece.file - 1;
+                                
+                                const rook = gameState.find(p => 
+                                    p.rank === piece.rank && 
+                                    p.file === rookFile && 
+                                    p.type === 'rook' && 
+                                    p.color === piece.color &&
+                                    !p.hasMoved
+                                );
+                                
+                                if (!rook) return false;
+                                
+                                // Check if squares between are empty
+                                if (gameState.some(p => 
+                                    p.rank === piece.rank && 
+                                    (p.file === intermediateFile || p.file === targetFile || p.file === piece.file - 1)
+                                )) return false;
+                                
+                                return true;
+                            }
+                        }
+                        return false;
+                        
+                    default:
+                        return false;
+                }
+            }
+            
+            function isPathBlocked(piece, targetRank, targetFile) {
+                const rankStep = Math.sign(targetRank - piece.rank);
+                const fileStep = Math.sign(targetFile - piece.file);
+                
+                let currentRank = piece.rank + rankStep;
+                let currentFile = piece.file + fileStep;
+                
+                while (currentRank !== targetRank || currentFile !== targetFile) {
+                    if (gameState.some(p => p.rank === currentRank && p.file === currentFile)) {
+                        return true;
+                    }
+                    currentRank += rankStep;
+                    currentFile += fileStep;
+                }
+                
+                return false;
+            }
+            
+            function isKingInCheck(color) {
+                const king = gameState.find(p => p.type === 'king' && p.color === color);
+                if (!king) return false;
+                
+                return gameState.some(piece => {
+                    if (piece.color === color) return false;
+                    return isValidMoveWithoutCheck(piece, king.rank, king.file);
+                });
+            }
+            
+            // Version of isValidMove that doesn't check for king safety (to avoid infinite recursion)
+            function isValidMoveWithoutCheck(piece, targetRank, targetFile) {
+                // Check if target square has a piece of the same color
+                const targetPiece = gameState.find(p => p.rank === targetRank && p.file === targetFile);
+                if (targetPiece && targetPiece.color === piece.color) {
+                    return false;
+                }
+                
+                const dx = Math.abs(targetFile - piece.file);
+                const dy = targetRank - piece.rank;
+                const direction = piece.color === 'white' ? 1 : -1;
+                
+                switch(piece.type) {
+                    case 'pawn':
+                        // Forward move
+                        if (targetFile === piece.file) {
+                            if (!targetPiece) {
+                                if (dy === direction) return true;
+                                if (!piece.hasMoved && dy === 2 * direction) {
+                                    // Check if path is clear
+                                    const intermediateRank = piece.rank + direction;
+                                    return !gameState.some(p => 
+                                        p.file === piece.file && 
+                                        p.rank === intermediateRank
+                                    ) && !gameState.some(p => 
+                                        p.file === piece.file && 
+                                        p.rank === targetRank
+                                    );
+                                }
+                            }
+                            return false;
+                        }
+                        
+                        // Capture
+                        if (dx === 1 && dy === direction) {
+                            // Normal capture
+                            if (targetPiece) return true;
+                            
+                            // En passant
+                            if (enPassantTarget && 
+                                targetRank === enPassantTarget.rank && 
+                                targetFile === enPassantTarget.file) {
+                                return true;
+                            }
+                        }
+                        return false;
+                        
+                    case 'rook':
+                        return (dx === 0 || dy === 0) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'knight':
+                        return (dx === 1 && Math.abs(dy) === 2) || (dx === 2 && Math.abs(dy) === 1);
+                        
+                    case 'bishop':
+                        return (dx === Math.abs(dy)) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'queen':
+                        return ((dx === Math.abs(dy)) || (dx === 0 || dy === 0)) && !isPathBlocked(piece, targetRank, targetFile);
+                        
+                    case 'king':
+                        return dx <= 1 && Math.abs(dy) <= 1;
+                        
+                    default:
+                        return false;
+                }
+            }
+            
+            function isCheckmated(color) {
+                if (!isKingInCheck(color)) return false;
+                
+                // Check if any move can get the king out of check
+                for (const piece of gameState) {
+                    if (piece.color !== color) continue;
+                    
+                    for (let rank = 1; rank <= 8; rank++) {
+                        for (let file = 1; file <= 8; file++) {
+                            if (isValidMove(piece, rank, file)) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            function isStalemated(color) {
+                if (isKingInCheck(color)) return false;
+                
+                // Check if player has any valid moves
+                for (const piece of gameState) {
+                    if (piece.color !== color) continue;
+                    
+                    for (let rank = 1; rank <= 8; rank++) {
+                        for (let file = 1; file <= 8; file++) {
+                            if (isValidMove(piece, rank, file)) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            undoBtn.addEventListener('click', () => {
+                if (moveHistory.length > 0) {
+                    const lastMove = moveHistory.pop();
+                    gameState = lastMove.state;
+                    enPassantTarget = lastMove.enPassant;
+                    castlingRights = lastMove.castling;
+                    currentPlayer = lastMove.currentPlayer;
+                    checkStatus = lastMove.checkStatus;
+                    initializeBoard();
+                }
+            });
+            
+            resetBtn.addEventListener('click', () => {
+                currentPlayer = 'white';
+                gameState = createInitialState();
+                moveHistory = [];
+                enPassantTarget = null;
+                castlingRights = {
+                    white: { kingSide: true, queenSide: true },
+                    black: { kingSide: true, queenSide: true }
+                };
+                checkStatus = { white: false, black: false };
+                initializeBoard();
+            });
+            
+            // Start the game
+            gameState = createInitialState();
+            initializeBoard();
+        });
+    </script>
+</body>
+</html>
