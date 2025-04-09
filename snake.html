@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Snake Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="score-container">Score: <span id="score">0</span></div>
+        <canvas id="game-board"></canvas>
+        
+        <div class="game-over">
+            <h2>Game Over</h2>
+            <div class="final-score">Your score: <span id="final-score">0</span></div>
+            <button class="btn" id="replay-btn">Play Again</button>
+        </div>
+        
+        <div class="controls">
+            <p>Use arrow keys or buttons below</p>
+            <div class="control-panel">
+                <button class="control-btn" id="up-btn">↑</button>
+                <div class="row">
+                    <button class="control-btn" id="left-btn">←</button>
+                    <button class="control-btn" id="down-btn">↓</button>
+                    <button class="control-btn" id="right-btn">→</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="scrip.js"></script>
+</body>
+</html>
